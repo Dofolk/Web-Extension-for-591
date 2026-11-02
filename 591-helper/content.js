@@ -11,7 +11,7 @@
   #toggle{position:fixed;right:22px;bottom:24px;z-index:2147483647;background:#155e4b;color:white;box-shadow:0 4px 24px #0003}
   #panel{position:fixed;right:22px;top:70px;bottom:80px;width:min(560px,calc(100vw - 32px));z-index:2147483646;background:#f8fbf9;border:1px solid #cadbd4;border-radius:16px;box-shadow:0 12px 50px #0003;overflow:auto;padding:22px}
   [hidden]{display:none!important}h2{font-size:21px;margin:0 0 8px}p{line-height:1.65}.muted{color:#60766d;font-size:12px}#search{background:#155e4b;color:white}#status{white-space:pre-line;font-size:13px;line-height:1.6}article{padding:16px;background:white;border:1px solid #dae6df;border-radius:12px;margin-top:12px}article.seen{opacity:.6}article a{font-weight:650;font-size:16px;text-decoration:none}article p{font-size:13px;margin:9px 0}.price{font-weight:bold;color:#a84d22}#close{float:right}#detail{margin:12px 0}#tools{border-top:1px solid #d7e3dd;margin-top:20px;padding-top:12px}#restore{max-width:100%}
-  </style><button id="toggle">⌂ 租屋小幫手</button><section id="panel" hidden><button id="close" aria-label="關閉">✕</button><h2>找房，從沒看過的開始</h2><p class="muted">已看過紀錄只保存在這個 Edge 設定檔。</p><label><input type="checkbox" id="hide">隱藏已看過</label><div id="detail"></div><div id="searchArea"><p>租屋類型（可複選）</p><div id="kinds"></div><p class="muted">沿用目前網址的地區、租金等條件。每次載入各房型一頁，合併去重；清單依房型及原站順序排列，不是跨房型全域排序。</p><button id="search">搜尋選取房型</button> <button id="more" hidden>載入各房型下一頁</button><p id="status" role="status"></p><div id="sources"></div><div id="results"></div></div><div id="tools"><p class="muted">備份／還原請點 Edge 工具列的擴充功能圖示。本機紀錄與備份未加密；網頁可觀察已顯示的看過標記。</p><p class="muted" id="notice"></p></div></section>`;
+  </style><button id="toggle">⌂ 租屋小幫手</button><section id="panel" hidden><button id="close" aria-label="關閉">✕</button><h2>找房，從沒看過的開始</h2><p class="muted">已看過紀錄只保存在這個 Edge 設定檔。</p><label><input type="checkbox" id="hide">隱藏已看過</label><label><input type="checkbox" id="expireSeen">自動清除超過 90 天的已讀紀錄</label><div id="detail"></div><div id="searchArea"><p>租屋類型（可複選）</p><div id="kinds"></div><p class="muted">沿用目前網址的地區、租金等條件。每次載入各房型一頁，合併去重；清單依房型及原站順序排列，不是跨房型全域排序。</p><button id="search">搜尋選取房型</button> <button id="more" hidden>載入各房型下一頁</button><p id="status" role="status"></p><div id="sources"></div><div id="results"></div></div><div id="tools"><p class="muted">備份／還原請點 Edge 工具列的擴充功能圖示。本機紀錄與備份未加密；網頁可觀察已顯示的看過標記。</p><p class="muted" id="notice"></p></div></section>`;
   const filterHost = document.createElement('div');
   filterHost.id = 'rh-inline-filters';
   const listHost = document.createElement('div');
@@ -162,6 +162,25 @@
   async function mark(id,value){try{const key='rhSeen:'+id;if(value){const v=Date.now();await chrome.storage.local.set({[key]:v});store[key]=v;}else{await chrome.storage.local.remove(key);delete store[key];}refresh();render();}catch(e){notice('紀錄儲存失敗：'+e.message);}}
   $('#toggle').onclick=()=>{$('#panel').hidden=!$('#panel').hidden;};$('#close').onclick=()=>{$('#panel').hidden=true;};
   $('#hide').checked=hide;
+  async function cleanExpired(){
+    if(store.rhExpireSeen===false)return;
+    const candidates=Object.keys(store).filter(k=>H.expiredSeen(k,store[k]));
+    if(!candidates.length)return;
+    const current=await chrome.storage.local.get(['rhExpireSeen',...candidates]);
+    if(current.rhExpireSeen===false)return;
+    const expired=candidates.filter(k=>H.expiredSeen(k,current[k]));
+    if(expired.length)await chrome.storage.local.remove(expired);
+  }
+  async function runCleanup(){
+    try{await cleanExpired();}catch(e){notice('已讀紀錄清理失敗：'+e.message);}
+  }
+  $('#expireSeen').checked=store.rhExpireSeen!==false;
+  $('#expireSeen').onchange=async()=>{
+    const enabled=$('#expireSeen').checked;
+    await chrome.storage.local.set({rhExpireSeen:enabled});
+    store.rhExpireSeen=enabled;
+    if(enabled)await runCleanup();
+  };
   $('#hide').onchange=async()=>{hide=$('#hide').checked;await chrome.storage.local.set({rhHide:hide});refresh();render();};
   const isMap = location.pathname === '/map-index.html';
   let mapControls = null;
@@ -285,7 +304,7 @@
     await load();
   };
   $('#more').onclick=()=>{if(location.href!==runBase){$('#status').textContent='搜尋條件已變更，請重新按「搜尋選取房型」。';return;}load();};
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local'||Object.keys(changes).every(key=>key.startsWith('rhCache1:')))return;for(const [k,v]of Object.entries(changes)){if(v.newValue===undefined)delete store[k];else store[k]=v.newValue;}hide=!!store.rhHide;$('#hide').checked=hide;refresh();render();});
+  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local'||Object.keys(changes).every(key=>key.startsWith('rhCache1:')))return;for(const [k,v]of Object.entries(changes)){if(v.newValue===undefined)delete store[k];else store[k]=v.newValue;}hide=!!store.rhHide;$('#hide').checked=hide;$('#expireSeen').checked=store.rhExpireSeen!==false;refresh();render();});
   async function route(){const id=H.idOf(location.href);if(id&&detailMarked!==id){detailMarked=id;await mark(id,true);}if(!id)detailMarked=null;refresh();}
   let timer;
   new MutationObserver(mutations=>{
@@ -322,6 +341,8 @@
     resetList();route();
   }
   if(isMap && typeof window!=='undefined')window.addEventListener('hashchange',checkLocation);
+  setInterval(runCleanup,3600000);
   setInterval(checkLocation,1000);
   await route();
+  await runCleanup();
 })();

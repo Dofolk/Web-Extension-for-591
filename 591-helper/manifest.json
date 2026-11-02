@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "租屋小幫手・已看過與房型多選",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "在 591 記錄已看過的房源，合併搜尋多種租屋類型。資料僅存於本機。",
   "permissions": [
     "storage"

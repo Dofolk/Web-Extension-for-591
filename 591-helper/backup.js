@@ -7,7 +7,7 @@ function validRecords(data){
 }
 document.getElementById('export').onclick=async e=>{
   if(!e.isTrusted)return;
-  try{const all=await chrome.storage.local.get(null);const records=Object.fromEntries(Object.entries(all).filter(([k,v])=>/^rhSeen:\d{1,20}$/.test(k)&&Number.isSafeInteger(v)&&v>0));
+  try{const all=await chrome.storage.local.get(null);const records=Object.fromEntries(Object.entries(all).filter(([k,v])=>/^rhSeen:\d{1,20}$/.test(k)&&Number.isSafeInteger(v)&&v>0&&(all.rhExpireSeen===false||!RentHelper.expiredSeen(k,v))));
     const url=URL.createObjectURL(new Blob([JSON.stringify({version:1,records},null,2)],{type:'application/json'}));
     const a=document.createElement('a');a.href=url;a.download='591-seen-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);notice('已建立備份。');
   }catch(err){notice('匯出失敗：'+err.message);}
@@ -15,7 +15,7 @@ document.getElementById('export').onclick=async e=>{
 document.getElementById('restore').onchange=async e=>{
   if(!e.isTrusted)return;
   try{const file=e.target.files[0];if(!file)return;if(file.size>5000000)throw new Error('檔案過大');const entries=validRecords(JSON.parse(await file.text()));
-    const current=await chrome.storage.local.get(entries.map(([k])=>k));const records=Object.fromEntries(entries.map(([k,v])=>[k,Math.max(Number.isSafeInteger(current[k])?current[k]:0,v)]));
-    await chrome.storage.local.set(records);notice(`已合併 ${entries.length} 筆紀錄。`);
+    const current=await chrome.storage.local.get(['rhExpireSeen',...entries.map(([k])=>k)]);const kept=entries.filter(([k,v])=>current.rhExpireSeen===false||!RentHelper.expiredSeen(k,v));const records=Object.fromEntries(kept.map(([k,v])=>[k,Math.max(Number.isSafeInteger(current[k])?current[k]:0,v)]));
+    await chrome.storage.local.set(records);notice(`已合併 ${kept.length} 筆紀錄，略過 ${entries.length-kept.length} 筆過期紀錄。`);
   }catch(err){notice('還原失敗：'+err.message);}finally{e.target.value='';}
 };

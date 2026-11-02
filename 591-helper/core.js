@@ -79,5 +79,8 @@
     if(!items.size) throw new Error('未辨識到此房型的房源，可能無結果、頁面改版或需要驗證；請開啟原搜尋頁確認。');
     return {items:[...items.values()],next:nextURL ? searchURL(url,kind,Number(nextURL.searchParams.get('page'))) : null};
   }
-  globalThis.RentHelper={kinds,idOf,searchURL,parse,readCard};
+  function expiredSeen(key,time,now=Date.now()){
+    return /^rhSeen:\d{1,20}$/.test(key) && Number.isSafeInteger(time) && time>0 && now-time>90*86400000;
+  }
+  globalThis.RentHelper={expiredSeen,kinds,idOf,searchURL,parse,readCard};
 })();
